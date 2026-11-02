@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aplikasi Catatan - UTS DevOps</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f3f4f6; margin:0; padding:20px; }
+    .box { max-width:700px; margin:auto; }
+    h1 { color:#1f2937; }
+    .card { background:#fff; padding:16px; border-radius:8px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+    input, textarea { width:100%; padding:8px; margin:6px 0; box-sizing:border-box; border:1px solid #d1d5db; border-radius:4px; font-family:inherit; }
+    button, .btn { background:#2563eb; color:#fff; border:none; padding:8px 14px; border-radius:4px; cursor:pointer; text-decoration:none; font-size:14px; display:inline-block; }
+    .hapus { background:#dc2626; }
+    .edit { background:#f59e0b; }
+    .aksi { display:flex; gap:8px; margin-top:8px; }
+    .aksi form { margin:0; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <h1>Aplikasi Catatan</h1>
+
+  <div class="card">
+    {% if edit %}
+    <h3>Edit Catatan</h3>
+    <form method="post" action="{{ url_for('update', id=edit['id']) }}">
+      <input name="judul" value="{{ edit['judul'] }}" required>
+      <textarea name="isi" rows="3" required>{{ edit['isi'] }}</textarea>
+      <button type="submit">Simpan Perubahan</button>
+      <a class="btn hapus" href="{{ url_for('index') }}">Batal</a>
+    </form>
+    {% else %}
+    <h3>Tambah Catatan</h3>
+    <form method="post" action="{{ url_for('tambah') }}">
+      <input name="judul" placeholder="Judul" required>
+      <textarea name="isi" rows="3" placeholder="Isi catatan" required></textarea>
+      <button type="submit">Tambah</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% for c in catatan %}
+  <div class="card">
+    <strong>{{ c['judul'] }}</strong>
+    <p>{{ c['isi'] }}</p>
+    <div class="aksi">
+      <a class="btn edit" href="{{ url_for('edit', id=c['id']) }}">Edit</a>
+      <form method="post" action="{{ url_for('hapus', id=c['id']) }}" onsubmit="return confirm('Hapus catatan ini?')">
+        <button class="hapus" type="submit">Hapus</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p>Belum ada catatan.</p>
+  {% endfor %}
+</div>
+</body>
+</html>

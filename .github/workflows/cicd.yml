@@ -1,0 +1,98 @@
+name: CI-CD Podman
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ===================== CI: Test + Build + Push =====================
+  ci:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+    steps:
+      - name: Ambil source code
+        uses: actions/checkout@v4
+
+      - name: Siapkan Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependency
+        run: pip install -r requirements-dev.txt
+
+      - name: Jalankan unit test
+        run: python -m pytest tests -v
+
+      - name: Tentukan nama image
+        id: vars
+        run: |
+          REPO=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          echo "image=${REGISTRY}/${REPO}" >> "$GITHUB_OUTPUT"
+
+      - name: Build image dengan Podman
+        run: |
+          podman build \
+            -t ${{ steps.vars.outputs.image }}:${{ github.sha }} \
+            -t ${{ steps.vars.outputs.image }}:latest \
+            -f Containerfile .
+
+      - name: Tes container (smoke test)
+        run: |
+          podman run -d --name smoke -p 5000:5000 ${{ steps.vars.outputs.image }}:latest
+          sleep 5
+          curl --fail http://127.0.0.1:5000/health
+          podman rm -f smoke
+
+      - name: Login ke GitHub Container Registry
+        if: github.event_name == 'push'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin
+
+      - name: Push image
+        if: github.event_name == 'push'
+        run: |
+          podman push ${{ steps.vars.outputs.image }}:${{ github.sha }}
+          podman push ${{ steps.vars.outputs.image }}:latest
+
+  # ===================== CD: Deploy otomatis =====================
+  cd:
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Login ke registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin
+
+      - name: Pull image terbaru
+        run: podman pull ${{ needs.ci.outputs.image }}:${{ github.sha }}
+
+      - name: Deploy container
+        run: |
+          podman rm -f catatan-app || true
+          podman run -d \
+            --name catatan-app \
+            -p 8080:5000 \
+            -v catatan-data:/data \
+            -e APP_VERSION=${{ github.sha }} \
+            --restart unless-stopped \
+            ${{ needs.ci.outputs.image }}:${{ github.sha }}
+
+      - name: Cek aplikasi hidup
+        run: |
+          sleep 5
+          curl --fail http://127.0.0.1:8080/health

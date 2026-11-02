@@ -1,0 +1,15 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: catatan-app:latest
+    container_name: catatan-app
+    ports:
+      - "8080:5000"
+    volumes:
+      - catatan-data:/data
+    restart: unless-stopped
+
+volumes:
+  catatan-data:
